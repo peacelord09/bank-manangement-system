@@ -1,0 +1,116 @@
+import mysql.connector
+import random
+
+db = mysql.connector.connect(host="localhost", user="root", password="sql", database="bankdb")
+c = db.cursor()
+
+def create_account():
+    name = input("Enter name: ")
+    aadhar = input("Enter Aadhaar number: ")
+    c.execute("select * from accounts where aadhar = %s", (aadhar,))
+    if c.fetchone():
+        print("Aadhaar already exists.")
+        return
+    initial = float(input("Enter initial deposit: "))
+    acc_id = random.randint(100000, 999999)
+    c.execute("insert into accounts (account_id, name, aadhar, balance) values (%s,%s,%s,%s)", (acc_id, name, aadhar, initial))
+    c.execute("insert into transactions (account_id, type, amount) values (%s,%s,%s)", (acc_id, 'deposit', initial))
+    db.commit()
+    print("Account created. ID:", acc_id)
+
+def deposit():
+    acc_id = int(input("Enter account ID: "))
+    amount = float(input("Enter deposit amount: "))
+    c.execute("update accounts set balance = balance + %s where account_id = %s", (amount, acc_id))
+    c.execute("insert into transactions (account_id, type, amount) values (%s,%s,%s)", (acc_id, 'deposit', amount))
+    db.commit()
+    print("Deposit successful.")
+
+def withdraw():
+    acc_id = int(input("Enter account ID: "))
+    amount = float(input("Enter withdrawal amount: "))
+    c.execute("select balance from accounts where account_id = %s", (acc_id,))
+    bal = c.fetchone()
+    if bal and amount >= 500 and bal[0] - amount >= 10:
+        c.execute("update accounts set balance = balance - %s where account_id = %s", (amount, acc_id))
+        c.execute("insert into transactions (account_id, type, amount) values (%s,%s,%s)", (acc_id, 'withdraw', amount))
+        db.commit()
+        print("Withdrawal successful.")
+    else:
+        print("Cannot withdraw. Minimum ₹500 and ₹10 must remain.")
+
+def check_balance():
+    acc_id = int(input("Enter account ID: "))
+    c.execute("select balance from accounts where account_id = %s", (acc_id,))
+    bal = c.fetchone()
+    if bal:
+        print("Current balance:", bal[0])
+    else:
+        print("Account not found.")
+
+def view_transactions():
+    acc_id = int(input("Enter account ID: "))
+    c.execute("select type, amount, date from transactions where account_id = %s order by date desc", (acc_id,))
+    rows = c.fetchall()
+    if rows:
+        for r in rows:
+            print(r[2], "|", r[0], "| Amount:", r[1])
+    else:
+        print("No transactions.")
+
+def delete_account():
+    acc_id = int(input("Enter account ID: "))
+    c.execute("delete from transactions where account_id = %s", (acc_id,))
+    c.execute("delete from accounts where account_id = %s", (acc_id,))
+    db.commit()
+    print("Account deleted.")
+
+def list_accounts():
+    c.execute("select account_id, name, balance from accounts")
+    rows = c.fetchall()
+    for r in rows:
+        print("ID:", r[0], "Name:", r[1], "Balance:", r[2])
+
+def transfer_money():
+    from_id = int(input("From account ID: "))
+    to_id = int(input("To account ID: "))
+    amount = float(input("Amount to transfer: "))
+    c.execute("select balance from accounts where account_id = %s", (from_id,))
+    bal = c.fetchone()
+    if bal and bal[0] >= amount:
+        c.execute("update accounts set balance = balance - %s where account_id = %s", (amount, from_id))
+        c.execute("update accounts set balance = balance + %s where account_id = %s", (amount, to_id))
+        c.execute("insert into transactions (account_id, type, amount) values (%s,%s,%s)", (from_id, 'transfer_out', amount))
+        c.execute("insert into transactions (account_id, type, amount) values (%s,%s,%s)", (to_id, 'transfer_in', amount))
+        db.commit()
+        print("Transfer successful.")
+    else:
+        print("Invalid account or insufficient funds.")
+
+def main():
+    print("\n--- Bank Management System ---")
+    print("1. Create Account")
+    print("2. Deposit")
+    print("3. Withdraw")
+    print("4. Check Balance")
+    print("5. View Transactions")
+    print("6. Delete Account")
+    print("7. List All Accounts")
+    print("8. Transfer Money")
+    print("9. Exit")
+
+    while True:
+        ch = input("\nEnter choice: ")
+        if ch == '1': create_account()
+        elif ch == '2': deposit()
+        elif ch == '3': withdraw()
+        elif ch == '4': check_balance()
+        elif ch == '5': view_transactions()
+        elif ch == '6': delete_account()
+        elif ch == '7': list_accounts()
+        elif ch == '8': transfer_money()
+        elif ch == '9': break
+
+    db.close()
+
+main()
